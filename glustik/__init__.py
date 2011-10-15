@@ -18,18 +18,26 @@ class GluStik(object):
     path_parts = [] # relative path parts as the layout is traversed
     value_handlers = {} # handlers for dictionary value types
     
-    def __init__(self, name, base_path=None, context=None, safe=True):
+    def __init__(self, name, base_path=None, context=None, safe=True,
+                check_name=True):
         """
         Constructs a glustik instance and defines the context based on the given
         name.
         """
-        if self._is_name_safe(name):
-            self.safe = safe
-            if not base_path:
-                base_path = os.getcwd()
-            self.base_path = base_path
-            self._make_context(name, context)
-            self._register_handlers()
+        if check_name and not self._is_name_safe(name):
+            raise Exception("%s is not a valid name" % name)
+        self.safe = safe
+        if not base_path:
+            base_path = os.getcwd()
+        self.base_path = base_path
+        self._make_context(name, context)
+        self._register_handlers()
+    
+    def _reset(self):
+        """
+        Reset state.
+        """
+        self.path_parts = []
     
     def _contextualize(self, s, context=None):
         """
@@ -68,7 +76,8 @@ class GluStik(object):
             vt = type(value)
             try:
                 self.value_handlers[vt](value, key=s)
-            except IndexError:
+            except KeyError:
+                self._reset()
                 raise Exception("No handler for value type %s" % str(vt))
         self.path_parts.pop()
     
@@ -87,16 +96,16 @@ class GluStik(object):
         elif func:
             key(t)
         else:
+            self._reset()
             raise Exception("No execution path for key %s with tuple value %s" % (str(key),str(t)))
     
     def _is_name_safe(self, name):
         try:
             imp.find_module(name)
-            raise Exception("%s is not a valid name" % name)
-        except:
-            if not re.search(r'^[_a-zA-Z]\w*$', name):
-                raise Exception("%s is not a valid name" % name)
-            return True
+        except ImportError:
+            if re.search(r'^[_a-zA-Z]\w*$', name):
+                return True
+        return False
     
     def _is_safe(self, path):
         """
@@ -130,6 +139,7 @@ class GluStik(object):
         elif tx is str:
             return str_or_list
         else:
+            self._reset()
             raise Exception("Path arguments should be string or list. Got %s instead" % tx)
     
     def _register_handlers(self):
@@ -173,8 +183,10 @@ class GluStik(object):
                     try:
                         self.key_handlers[key_type](key, val)
                     except IndexError:
+                        self._reset()
                         raise Exception("No handler for key type %s" % str(key_type))
         else:
+            self._reset()
             raise TypeError("Layout must be a dictionary. Got %s instead" % type(layout))
         self.dry_run = old_dry_run
     
@@ -217,8 +229,10 @@ class GluStik(object):
                 if type(d) is str:
                     self.build({d:self.empty})
                 else:
+                    self._reset()
                     raise TypeError("A list passed to the dirs method should only contain strings")
         else:
+            self._reset()
             raise TypeError("dirs method requires a list or dictionary. Got %s instead" % dt)
     
     def empty(self, path=None, key=None):
