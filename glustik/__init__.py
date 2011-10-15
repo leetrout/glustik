@@ -182,7 +182,7 @@ class GluStik(object):
                 else:
                     try:
                         self.key_handlers[key_type](key, val)
-                    except IndexError:
+                    except KeyError:
                         self._reset()
                         raise Exception("No handler for key type %s" % str(key_type))
         else:
